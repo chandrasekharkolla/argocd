@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kagent-postgres-init
+  namespace: kagent
+data:
+  init.sql: |
+    CREATE ROLE kagent_owner WITH LOGIN PASSWORD 'kagent_owner_pass';
+    CREATE ROLE kagent_readwrite WITH LOGIN PASSWORD 'kagent_rw_pass';
+    CREATE SCHEMA IF NOT EXISTS kagent AUTHORIZATION kagent_owner;
+    GRANT USAGE ON SCHEMA kagent TO kagent_readwrite;
+    ALTER DEFAULT PRIVILEGES FOR ROLE kagent_owner IN SCHEMA kagent
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO kagent_readwrite;
+    ALTER DEFAULT PRIVILEGES FOR ROLE kagent_owner IN SCHEMA kagent
+      GRANT USAGE, SELECT ON SEQUENCES TO kagent_readwrite;
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kagent-postgres-owner
+  namespace: kagent
+type: Opaque
+stringData:
+  ownerConnectionString: "postgresql://kagent_owner:kagent_owner_pass@kagent-postgres.kagent.svc.cluster.local:5432/kagent?sslmode=disable"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kagent-postgres-readwrite
+  namespace: kagent
+type: Opaque
+stringData:
+  readWriteConnectionString: "postgresql://kagent_readwrite:kagent_rw_pass@kagent-postgres.kagent.svc.cluster.local:5432/kagent?sslmode=disable"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kagent-postgres
+  namespace: kagent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kagent-postgres
+  template:
+    metadata:
+      labels:
+        app: kagent-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: kagent
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              value: postgres
+          volumeMounts:
+            - name: init-sql
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init-sql
+          configMap:
+            name: kagent-postgres-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kagent-postgres
+  namespace: kagent
+spec:
+  selector:
+    app: kagent-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
