@@ -18,6 +18,14 @@ spec:
         ui:
           service:
             type: LoadBalancer
+        tools:
+          grafana-mcp:
+            enabled: false
+          querydoc:
+            enabled: false
+        agents:
+          istio-agent:
+            enabled: false
         providers:
           default: openAI
           openAI:
