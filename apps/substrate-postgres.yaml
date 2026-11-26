@@ -12,7 +12,7 @@ spec:
   source:
     repoURL: https://github.com/chandrasekharkolla/argocd.git
     targetRevision: main
-    path: infra/argocd/manifests/substrate-postgres
+    path: manifests/substrate-postgres
   destination:
     server: https://kubernetes.default.svc
     namespace: ate-system
