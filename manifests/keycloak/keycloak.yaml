@@ -78,6 +78,62 @@ spec:
             ],
             "clientScopes": [
               {
+                "name": "profile",
+                "protocol": "openid-connect",
+                "attributes": {
+                  "include.in.token.scope": "true",
+                  "display.on.consent.screen": "true"
+                },
+                "protocolMappers": [
+                  {
+                    "name": "username",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-usermodel-attribute-mapper",
+                    "config": {
+                      "user.attribute": "username",
+                      "claim.name": "preferred_username",
+                      "jsonType.label": "String",
+                      "id.token.claim": "true",
+                      "access.token.claim": "true",
+                      "userinfo.token.claim": "true"
+                    }
+                  },
+                  {
+                    "name": "full name",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-full-name-mapper",
+                    "config": {
+                      "id.token.claim": "true",
+                      "access.token.claim": "true",
+                      "userinfo.token.claim": "true"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "email",
+                "protocol": "openid-connect",
+                "attributes": {
+                  "include.in.token.scope": "true",
+                  "display.on.consent.screen": "true"
+                },
+                "protocolMappers": [
+                  {
+                    "name": "email",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-usermodel-attribute-mapper",
+                    "config": {
+                      "user.attribute": "email",
+                      "claim.name": "email",
+                      "jsonType.label": "String",
+                      "id.token.claim": "true",
+                      "access.token.claim": "true",
+                      "userinfo.token.claim": "true"
+                    }
+                  }
+                ]
+              },
+              {
                 "name": "groups",
                 "protocol": "openid-connect",
                 "attributes": {
@@ -115,11 +171,7 @@ spec:
                   "http://localhost"
                 ],
                 "defaultClientScopes": [
-                  "web-origins",
-                  "acr",
                   "profile",
-                  "roles",
-                  "basic",
                   "email",
                   "groups"
                 ]
