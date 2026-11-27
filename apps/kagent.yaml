@@ -18,6 +18,9 @@ spec:
         ui:
           service:
             type: LoadBalancer
+            ports:
+              port: 8082
+              targetPort: 8080
         tools:
           grafana-mcp:
             enabled: false

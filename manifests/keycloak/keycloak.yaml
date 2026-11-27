@@ -1,3 +1,141 @@
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: openbao-backend
+  namespace: keycloak
+spec:
+  provider:
+    vault:
+      server: "http://openbao.openbao.svc.cluster.local:8200"
+      path: "secret"
+      version: "v2"
+      auth:
+        tokenSecretRef:
+          name: "openbao-token"
+          key: "token"
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keycloak-admin
+  namespace: keycloak
+spec:
+  refreshInterval: 1m
+  secretStoreRef:
+    name: openbao-backend
+    kind: SecretStore
+  target:
+    name: keycloak-admin
+    creationPolicy: Owner
+  data:
+    - secretKey: admin-password
+      remoteRef:
+        key: keycloak/config
+        property: admin_password
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keycloak-realm-import
+  namespace: keycloak
+spec:
+  refreshInterval: 1m
+  secretStoreRef:
+    name: openbao-backend
+    kind: SecretStore
+  target:
+    name: keycloak-realm-import
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        ai-platform-realm.json: |
+          {
+            "realm": "ai-platform",
+            "enabled": true,
+            "groups": [
+              {
+                "name": "argocd-admins"
+              }
+            ],
+            "users": [
+              {
+                "username": "chandra",
+                "enabled": true,
+                "emailVerified": true,
+                "email": "chandra@local.dev",
+                "firstName": "Chandra",
+                "lastName": "Kolla",
+                "credentials": [
+                  {
+                    "type": "password",
+                    "value": "{{ .chandra_password }}",
+                    "temporary": false
+                  }
+                ],
+                "groups": ["/argocd-admins"]
+              }
+            ],
+            "clientScopes": [
+              {
+                "name": "groups",
+                "protocol": "openid-connect",
+                "attributes": {
+                  "include.in.token.scope": "true",
+                  "display.on.consent.screen": "true"
+                },
+                "protocolMappers": [
+                  {
+                    "name": "groups",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-group-membership-mapper",
+                    "config": {
+                      "claim.name": "groups",
+                      "full.path": "false",
+                      "id.token.claim": "true",
+                      "access.token.claim": "true",
+                      "userinfo.token.claim": "true"
+                    }
+                  }
+                ]
+              }
+            ],
+            "clients": [
+              {
+                "clientId": "argocd",
+                "enabled": true,
+                "publicClient": false,
+                "secret": "{{ .argocd_client_secret }}",
+                "standardFlowEnabled": true,
+                "redirectUris": [
+                  "http://localhost/auth/callback",
+                  "http://127.0.0.1/auth/callback"
+                ],
+                "webOrigins": [
+                  "http://localhost"
+                ],
+                "defaultClientScopes": [
+                  "web-origins",
+                  "acr",
+                  "profile",
+                  "roles",
+                  "basic",
+                  "email",
+                  "groups"
+                ]
+              }
+            ]
+          }
+  data:
+    - secretKey: argocd_client_secret
+      remoteRef:
+        key: keycloak/config
+        property: argocd_client_secret
+    - secretKey: chandra_password
+      remoteRef:
+        key: keycloak/config
+        property: chandra_password
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,12 +156,15 @@ spec:
       containers:
         - name: keycloak
           image: quay.io/keycloak/keycloak:26.1.2
-          args: ["start-dev"]
+          args: ["start-dev", "--import-realm"]
           env:
             - name: KC_BOOTSTRAP_ADMIN_USERNAME
               value: "admin"
             - name: KC_BOOTSTRAP_ADMIN_PASSWORD
-              value: "admin"
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: admin-password
             - name: KC_HTTP_ENABLED
               value: "true"
             - name: KC_HOSTNAME_STRICT
@@ -35,6 +176,10 @@ spec:
               containerPort: 8080
             - name: management
               containerPort: 9000
+          volumeMounts:
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -48,6 +193,10 @@ spec:
             limits:
               cpu: "1"
               memory: 1Gi
+      volumes:
+        - name: realm-import
+          secret:
+            secretName: keycloak-realm-import
 ---
 apiVersion: v1
 kind: Service
